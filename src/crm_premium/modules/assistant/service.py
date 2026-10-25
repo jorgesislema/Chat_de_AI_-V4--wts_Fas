@@ -125,18 +125,29 @@ def _tool_top(url, zone, kind, include_demo=False, branch_ids=None):
     return answer, {'items': rows}
 
 
-def _tool_citas_hoy(url, zone, include_demo=False):
+def _tool_citas_hoy(url, zone, include_demo=False, branch_ids=None):
     now_local = _local_now(zone)
     lo = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
     hi = lo + timedelta(days=1)
     demo = '' if include_demo else " AND origin <> 'demo'"
+    sede = ''
+    sede_params = []
+    if branch_ids is not None:
+        if not branch_ids:
+            return ('No tiene sedes con agenda asignada: sin citas en su '
+                    'ámbito. Origen: límite de alcance por sede.'), \
+                {'total': 0, 'por_estado': {}}
+        marks = ', '.join(['%s'] * len(branch_ids))
+        sede = f' AND branch_id IN ({marks})'
+        sede_params.extend(sorted(set(int(b) for b in branch_ids)))
     with transaction(url) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 f"""SELECT operational_status, count(*) AS n FROM appointments
-                    WHERE start_utc >= %s AND start_utc < %s{demo}
+                    WHERE start_utc >= %s AND start_utc < %s{demo}{sede}
                     GROUP BY operational_status""",
-                (lo.astimezone(timezone.utc), hi.astimezone(timezone.utc)))
+                (lo.astimezone(timezone.utc), hi.astimezone(timezone.utc),
+                 *sede_params))
             counts = {r['operational_status']: r['n'] for r in cur.fetchall()}
     total = sum(counts.values())
     detail = ', '.join(f"{v} {k}" for k, v in sorted(counts.items())) or 'ninguna'
@@ -145,16 +156,26 @@ def _tool_citas_hoy(url, zone, include_demo=False):
     return answer, {'total': total, 'por_estado': counts}
 
 
-def _tool_proximas(url, zone, limit=5, include_demo=False):
+def _tool_proximas(url, zone, limit=5, include_demo=False, branch_ids=None):
     demo = '' if include_demo else " AND a.origin <> 'demo'"
+    sede = ''
+    sede_params = []
+    if branch_ids is not None:
+        if not branch_ids:
+            return ('No tiene sedes con agenda asignada: sin próximas citas '
+                    'en su ámbito. Origen: límite de alcance por sede.'), \
+                {'items': []}
+        marks = ', '.join(['%s'] * len(branch_ids))
+        sede = f' AND a.branch_id IN ({marks})'
+        sede_params.extend(sorted(set(int(b) for b in branch_ids)))
     with transaction(url) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 f"""SELECT a.title, r.name AS resource, a.start_utc
                     FROM appointments a JOIN resources r ON r.id = a.resource_id
                     WHERE a.start_utc >= now()
-                      AND a.operational_status IN ('pending','confirmed'){demo}
-                    ORDER BY a.start_utc LIMIT %s""", (limit,))
+                      AND a.operational_status IN ('pending','confirmed'){demo}{sede}
+                    ORDER BY a.start_utc LIMIT %s""", (limit, *sede_params))
             rows = cur.fetchall()
     if not rows:
         return 'No hay próximas citas programadas. Origen: appointments.', {'items': []}
@@ -170,8 +191,8 @@ def _tool_proximas(url, zone, limit=5, include_demo=False):
 def _tool_stock_bajo(url, zone, branch_ids=None):
     from ..commerce import service as commerce
     items = [i for i in commerce.low_stock_products(url)
-             if branch_ids is None or i.get('branch_id') is None
-             or i['branch_id'] in branch_ids]
+             if branch_ids is None or (i.get('branch_id') is not None
+                                       and i['branch_id'] in branch_ids)]
     if not items:
         return ('Ningún producto está en o bajo su mínimo. '
                 'Origen: products con stock <= min_stock.'), {'items': []}
@@ -181,12 +202,15 @@ def _tool_stock_bajo(url, zone, branch_ids=None):
             + '\nOrigen: products (stock <= min_stock).'), {'items': items}
 
 
-def _tool_precio(url, zone, text):
+def _tool_precio(url, zone, text, branch_ids=None):
+    """E01-R/A2: precio/stock se consultan dentro del ámbito inventory.view;
+    en otra sede el artículo es inexistente para el usuario (sin filtrar)."""
     from ..commerce import service as commerce
-    product = commerce.find_product_by_text(url, text)
+    product = commerce.find_product_by_text(url, text, branch_ids=branch_ids)
     if not product:
-        return (f'No encontré un artículo activo que coincida con «{text}». '
-                'Pruebe con el nombre o el SKU. Origen: products.'), {'product': None}
+        return (f'No encontré un artículo activo que coincida con «{text}» '
+                'dentro de su ámbito. Pruebe con el nombre o el SKU. '
+                'Origen: products.'), {'product': None}
     noun = 'Tratamiento' if product['kind'] == 'servicio' else 'Producto'
     answer = (f"{noun} {product['name']} ({product['sku']}): precio actual "
               f"{_money(product['price'])}"
@@ -195,14 +219,25 @@ def _tool_precio(url, zone, text):
     return answer, {'product': product}
 
 
-def _tool_asistencia(url, zone):
+def _tool_asistencia(url, zone, branch_ids=None):
+    sede = ''
+    sede_params = []
+    if branch_ids is not None:
+        if not branch_ids:
+            return ('No tiene sedes con agenda asignada: sin asistencia que '
+                    'calcular en su ámbito. Origen: límite de alcance.'), \
+                {'rate': None, 'attended': 0, 'no_show': 0}
+        marks = ', '.join(['%s'] * len(branch_ids))
+        sede = f' AND branch_id IN ({marks})'
+        sede_params.extend(sorted(set(int(b) for b in branch_ids)))
     with transaction(url) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT count(*) FILTER (WHERE operational_status='attended') AS attended,
+                f"""SELECT count(*) FILTER (WHERE operational_status='attended') AS attended,
                           count(*) FILTER (WHERE operational_status='no_show') AS no_show
                    FROM appointments
-                   WHERE start_utc >= now() - interval '30 days'""")
+                   WHERE start_utc >= now() - interval '30 days'{sede}""",
+                (*sede_params,))
             found = cur.fetchone()
     closed = found['attended'] + found['no_show']
     rate = round(found['attended'] / closed * 100, 1) if closed else None
@@ -306,34 +341,46 @@ def _detect(question):
 
 
 def ask(url, *, question, user_id, zone='UTC', include_demo=False,
-        branch_ids=None):
+        branches=None):
     """Responde una pregunta con una herramienta y registra la auditoría.
 
-    CORR01/R04: ``user_id`` es identificación de auditoría; las herramientas
-    sólo leen datos operativos con permisos implícitos de usuario autenticado
-    (agregados). La vista global del historial exige rol admin en la ruta.
+    E01-R/A2: ``branches`` mapea acción → sedes autorizadas:
+    ``{'sales': [...]|None, 'agenda': [...]|None, 'inventory': [...]|None}``.
+    Cada herramienta consulta con el ámbito de SU acción (None = todas,
+    director; lista vacía = sin datos en su ámbito). ``user_id`` es sólo
+    identificación de auditoría.
     """
+    branches = branches or {}
+    sales_branches = branches.get('sales')
+    agenda_branches = branches.get('agenda')
+    inventory_branches = branches.get('inventory')
     question = (question or '').strip()[:500]
     if not question:
         return {'ok': False, 'code': 'empty', 'message': 'Escriba una pregunta'}
     intent, arg = _detect(question)
     if intent == 'ventas':
         answer, data = _tool_resumen_ventas(url, zone, arg, include_demo,
-                                            branch_ids=branch_ids)
+                                            branch_ids=sales_branches)
     elif intent == 'top_productos':
         answer, data = _tool_top(url, zone, arg, include_demo,
-                                 branch_ids=branch_ids)
+                                 branch_ids=sales_branches)
     elif intent == 'citas_hoy':
-        answer, data = _tool_citas_hoy(url, zone, include_demo)
+        answer, data = _tool_citas_hoy(url, zone, include_demo,
+                                       branch_ids=agenda_branches)
     elif intent == 'proximas_citas':
-        answer, data = _tool_proximas(url, zone, include_demo=include_demo)
+        answer, data = _tool_proximas(url, zone, include_demo=include_demo,
+                                      branch_ids=agenda_branches)
     elif intent == 'stock_bajo':
-        answer, data = _tool_stock_bajo(url, zone, branch_ids=branch_ids)
+        answer, data = _tool_stock_bajo(url, zone, branch_ids=inventory_branches)
     elif intent == 'precio':
-        answer, data = _tool_precio(url, zone, arg)
+        answer, data = _tool_precio(url, zone, arg,
+                                    branch_ids=inventory_branches)
     elif intent == 'asistencia':
-        answer, data = _tool_asistencia(url, zone)
+        answer, data = _tool_asistencia(url, zone, branch_ids=agenda_branches)
     elif intent == 'conocimiento':
+        # knowledge_docs no tiene dimensión de sede: se alcanza sólo con
+        # assistant.ask (guardia de ruta) y responde contenido de la
+        # organización; no expone datos de sede.
         answer, data = _tool_conocimiento(url, zone, arg)
     elif intent == 'no_disponible':
         answer, data = _tool_no_disponible(url, zone, question)

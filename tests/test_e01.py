@@ -203,17 +203,22 @@ def test_e01_asistente_respeta_sede(db_url, org, admin_user, plain_user):
     commerce.create_sale(db_url, lines=[{'product_id': p1['id'], 'qty': 1}],
                          actor=admin_user['id'], branch_id=b1['id'],
                          payment_method='efectivo')
+    # E01-R/A2: ask() recibe el mapa de ámbitos por acción; ventas usa el
+    # de sales.view.
     result = assistant.ask(db_url, question='ventas de hoy MARCA-E01',
                            user_id=plain_user['id'], zone=ZONE,
-                           branch_ids=[b2['id']])
+                           branches={'sales': [b2['id']], 'agenda': [b2['id']],
+                                     'inventory': [b2['id']]})
     assert abs(result['data']['neto']) < 0.01  # su sede no tiene ventas
     result_all = assistant.ask(db_url, question='ventas de hoy MARCA-E01B',
                                user_id=admin_user['id'], zone=ZONE,
-                               branch_ids=None)
+                               branches={'sales': None, 'agenda': None,
+                                         'inventory': None})
     assert abs(result_all['data']['neto'] - 40.0) < 0.01
     result_none = assistant.ask(db_url, question='ventas de hoy',
                                 user_id=plain_user['id'], zone=ZONE,
-                                branch_ids=[])
+                                branches={'sales': [], 'agenda': [],
+                                          'inventory': []})
     assert result_none['data']['neto'] == 0
 
 
