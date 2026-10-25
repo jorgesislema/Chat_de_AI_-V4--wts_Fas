@@ -73,7 +73,9 @@ def test_usuario_no_admin_no_ve_usuarios(db_url, org, admin_user):
     client = _plain_client(db_url, org, admin_user)
     _login(client, username='emilio')
     assert client.get('/users').status_code == 302
-    assert client.get('/api/agenda').status_code == 200
+    # E01-R/A3: sin asignación de ámbito el usuario NO recibe 'asesor'
+    # automático al leer el perfil; la agenda le queda denegada (403).
+    assert client.get('/api/agenda').status_code == 403
 
 
 def test_logout_revoca(client):

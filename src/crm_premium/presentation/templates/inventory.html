@@ -21,13 +21,21 @@
           <td>{% if p.is_active %}<span class="pill pill-confirmed">Activo</span>
               {% else %}<span class="pill pill-cancelled">Inactivo</span>{% endif %}</td>
           <td class="actions-cell">
-            <button class="btn btn-ghost btn-sm" type="button" onclick="showHistory({{ p.id }})">Historial</button>
-            {% if g.user['role'] == 'admin' %}
-            <button class="btn btn-ghost btn-sm" type="button" onclick="showPrice({{ p.id }}, '{{ p.name|e }}', {{ p.price }})">Precio</button>
-            {% if p.kind == 'producto' %}
-            <button class="btn btn-ghost btn-sm" type="button" onclick="showStock({{ p.id }}, '{{ p.name|e }}', {{ p.stock }})">Stock</button>
+            <button class="btn btn-ghost btn-sm" type="button"
+                    data-history="{{ p.id }}">Historial</button>
+            {% if p.can_price %}
+            <button class="btn btn-ghost btn-sm" type="button"
+                    data-price="{{ p.id }}" data-product-name="{{ p.name }}"
+                    data-current-price="{{ p.price }}">Precio</button>
             {% endif %}
-            <button class="btn btn-ghost btn-sm" type="button" onclick="toggleProduct({{ p.id }})">{{ 'Desactivar' if p.is_active else 'Activar' }}</button>
+            {% if p.can_manage and p.kind == 'producto' %}
+            <button class="btn btn-ghost btn-sm" type="button"
+                    data-stock="{{ p.id }}" data-product-name="{{ p.name }}"
+                    data-current-stock="{{ p.stock }}">Stock</button>
+            {% endif %}
+            {% if p.can_manage %}
+            <button class="btn btn-ghost btn-sm" type="button"
+                    data-toggle="{{ p.id }}">{{ 'Desactivar' if p.is_active else 'Activar' }}</button>
             {% endif %}
           </td>
         </tr>
@@ -38,11 +46,17 @@
     </table>
   </div>
 
-  {% if g.user['role'] == 'admin' %}
+  {% if can_manage %}
   <div class="card">
     <h2 class="card-title">Nuevo artículo</h2>
     <form method="post" action="{{ url_for('inventory_create') }}" class="form-grid">
       <input type="hidden" name="csrf_token" value="{{ g.session['csrf_token'] }}">
+      {% if branch_objs %}
+      <label for="branchSelect">Sede del artículo</label>
+      <select class="input" id="branchSelect" name="branch_id">
+        {% for b in branch_objs %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+      </select>
+      {% endif %}
       <label for="sku">SKU *</label>
       <input class="input" id="sku" name="sku" required maxlength="40" placeholder="SRV-LIMPIEZA">
       <label for="name">Nombre *</label>
@@ -76,7 +90,7 @@
     <label for="priceReason">Motivo del cambio (auditado) *</label>
     <input class="input" id="priceReason" maxlength="300" required>
     <div class="dialog-actions">
-      <button class="btn btn-ghost" type="button" onclick="priceDialog.close()">Cancelar</button>
+      <button class="btn btn-ghost" type="button" data-close-dialog="priceDialog">Cancelar</button>
       <button class="btn btn-primary" type="submit">Guardar precio</button>
     </div>
   </form>
@@ -91,7 +105,7 @@
     <label for="stockNote">Nota (auditada)</label>
     <input class="input" id="stockNote" maxlength="300">
     <div class="dialog-actions">
-      <button class="btn btn-ghost" type="button" onclick="stockDialog.close()">Cancelar</button>
+      <button class="btn btn-ghost" type="button" data-close-dialog="stockDialog">Cancelar</button>
       <button class="btn btn-primary" type="submit">Aplicar ajuste</button>
     </div>
   </form>
@@ -100,7 +114,7 @@
 <dialog id="historyDialog" class="dialog">
   <div class="dialog-head">
     <h3>Historial auditado</h3>
-    <button class="btn-icon" type="button" onclick="historyDialog.close()" aria-label="Cerrar">✕</button>
+    <button class="btn-icon" type="button" data-close-dialog="historyDialog" aria-label="Cerrar">✕</button>
   </div>
   <div class="dialog-body" id="historyBody"></div>
 </dialog>

@@ -39,7 +39,7 @@
       {% for d in summary.per_day %}
       <div class="bar-col" title="{{ d.day }}: {{ d.value }}">
         <span class="bar-value">{{ d.value if d.value else '' }}</span>
-        <span class="bar {% if d.day == summary.today %}bar-today{% endif %}" style="height: {{ (d.value / (max_v if max_v else 1) * 100) | round(1) }}%"></span>
+        <span class="bar {% if d.day == summary.today %}bar-today{% endif %}" data-bar-h="{{ (d.value / (max_v if max_v else 1) * 100) | round(1) }}%"></span>
         <span class="bar-label">{{ d.day[8:10] }}</span>
       </div>
       {% endfor %}
@@ -53,7 +53,7 @@
       {% for s in summary.by_status_30d %}
       <li class="status-row">
         <span class="status-name status-{{ s.key }}">{{ s.label }}</span>
-        <span class="status-track"><span class="status-fill status-{{ s.key }}" style="width: {{ (s.value / (max_s if max_s else 1) * 100) | round(1) }}%"></span></span>
+        <span class="status-track"><span class="status-fill status-{{ s.key }}" data-bar-w="{{ (s.value / (max_s if max_s else 1) * 100) | round(1) }}%"></span></span>
         <span class="status-n">{{ s.value }}</span>
       </li>
       {% endfor %}
@@ -68,7 +68,7 @@
       {% for r in summary.by_resource %}
       <li class="status-row">
         <span class="status-name">{{ r.label }}</span>
-        <span class="status-track"><span class="status-fill fill-accent" style="width: {{ (r.value / (max_r if max_r else 1) * 100) | round(1) }}%"></span></span>
+        <span class="status-track"><span class="status-fill fill-accent" data-bar-w="{{ (r.value / (max_r if max_r else 1) * 100) | round(1) }}%"></span></span>
         <span class="status-n">{{ r.value }}</span>
       </li>
       {% endfor %}

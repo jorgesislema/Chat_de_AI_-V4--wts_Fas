@@ -33,8 +33,13 @@ def _local_day_bounds(zone, day):
     return start, end
 
 
-def summary(url, *, zone, clock=None):
-    """KPIs del día, semana y 30 días + series para los gráficos."""
+def summary(url, *, zone, clock=None, appointment_branch_ids=None):
+    """KPIs del día, semana y 30 días + series para los gráficos.
+
+    E01-R/A2: ``appointment_branch_ids`` acota TODAS las consultas de citas a
+    las sedes autorizadas para agenda.view (None = todas, director; lista
+    vacía = cero datos, nunca el agregado global).
+    """
     tz = resolve_zone(zone)
     now = _clock(clock)
     today = now.astimezone(tz).date()
@@ -45,56 +50,70 @@ def summary(url, *, zone, clock=None):
     series_start, _ = _local_day_bounds(zone, today - timedelta(days=13))
     range30_end = day_end
 
+    sede = ''
+    sede_params = []
+    if appointment_branch_ids is not None:
+        if not appointment_branch_ids:
+            appointment_branch_ids = [-1]
+        marks = ', '.join(['%s'] * len(appointment_branch_ids))
+        sede = (f' AND branch_id IN ({marks})')
+        sede_params.extend(sorted(set(int(b) for b in appointment_branch_ids)))
+
+    def _sede(table_alias=''):
+        return sede.replace('branch_id', f'{table_alias}branch_id') if table_alias \
+            else sede
+
     with transaction(url) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT operational_status, count(*) AS n FROM appointments
-                   WHERE start_utc >= %s AND start_utc < %s
+                f"""SELECT operational_status, count(*) AS n FROM appointments
+                   WHERE start_utc >= %s AND start_utc < %s{sede}
                    GROUP BY operational_status""",
-                (day_start, day_end))
+                (day_start, day_end, *sede_params))
             today_counts = {r['operational_status']: r['n'] for r in cur.fetchall()}
 
             cur.execute(
-                """SELECT count(*) AS n FROM appointments
+                f"""SELECT count(*) AS n FROM appointments
                    WHERE start_utc >= %s AND start_utc < %s
-                     AND operational_status <> 'cancelled'""",
-                (week_start, week_end))
+                     AND operational_status <> 'cancelled'{sede}""",
+                (week_start, week_end, *sede_params))
             week_total = cur.fetchone()['n']
 
             cur.execute(
-                """SELECT ((start_utc AT TIME ZONE %s)::date) AS day, count(*) AS n
+                f"""SELECT ((start_utc AT TIME ZONE %s)::date) AS day, count(*) AS n
                    FROM appointments
                    WHERE start_utc >= %s AND start_utc < %s
-                     AND operational_status <> 'cancelled'
+                     AND operational_status <> 'cancelled'{sede}
                    GROUP BY 1""",
-                (zone, series_start, day_end))
+                (zone, series_start, day_end, *sede_params))
             per_day_raw = {r['day']: r['n'] for r in cur.fetchall()}
 
             cur.execute(
-                """SELECT r.name, count(*) AS n
+                f"""SELECT r.name, count(*) AS n
                    FROM appointments a JOIN resources r ON r.id = a.resource_id
                    WHERE a.start_utc >= %s AND a.start_utc < %s
-                     AND a.operational_status <> 'cancelled'
+                     AND a.operational_status <> 'cancelled'{_sede('a.')}
                    GROUP BY r.name ORDER BY n DESC, r.name LIMIT 8""",
-                (week_start, week_end))
+                (week_start, week_end, *sede_params))
             by_resource = [{'label': r['name'], 'value': r['n']} for r in cur.fetchall()]
 
             cur.execute(
-                """SELECT operational_status, count(*) AS n FROM appointments
-                   WHERE start_utc >= %s AND start_utc < %s
+                f"""SELECT operational_status, count(*) AS n FROM appointments
+                   WHERE start_utc >= %s AND start_utc < %s{sede}
                    GROUP BY operational_status""",
-                (range30_start, day_end))
+                (range30_start, day_end, *sede_params))
             by_status_raw = {r['operational_status']: r['n'] for r in cur.fetchall()}
 
             cur.execute(
-                """SELECT a.id, a.title, a.start_utc, a.end_utc, a.operational_status,
+                f"""SELECT a.id, a.title, a.start_utc, a.end_utc, a.operational_status,
                           r.name AS resource_name, c.full_name AS contact_name
                    FROM appointments a
                    JOIN resources r ON r.id = a.resource_id
                    LEFT JOIN contacts c ON c.id = a.contact_id
                    WHERE a.start_utc >= %s AND a.operational_status IN ('pending','confirmed')
+                     {_sede('a.')}
                    ORDER BY a.start_utc LIMIT 8""",
-                (now,))
+                (now, *sede_params))
             upcoming = []
             for r in cur.fetchall():
                 data = row(r)
@@ -105,21 +124,21 @@ def summary(url, *, zone, clock=None):
                 upcoming.append(data)
 
             cur.execute(
-                """SELECT count(*) AS total,
+                f"""SELECT count(*) AS total,
                           count(*) FILTER (WHERE operational_status = 'pending'
                                AND end_utc < %s) AS pending_closure
-                   FROM appointments WHERE operational_status <> 'cancelled'""",
-                (now,))
+                   FROM appointments WHERE operational_status <> 'cancelled'{sede}""",
+                (now, *sede_params))
             totals = cur.fetchone()
 
             cur.execute('SELECT count(*) AS n FROM contacts')
             contacts_total = cur.fetchone()['n']
 
             cur.execute(
-                """SELECT count(*) FILTER (WHERE operational_status='attended') AS attended,
+                f"""SELECT count(*) FILTER (WHERE operational_status='attended') AS attended,
                           count(*) FILTER (WHERE operational_status='no_show') AS no_show
-                   FROM appointments WHERE start_utc >= %s AND start_utc < %s""",
-                (range30_start, range30_end))
+                   FROM appointments WHERE start_utc >= %s AND start_utc < %s{sede}""",
+                (range30_start, range30_end, *sede_params))
             att = cur.fetchone()
 
     days = []

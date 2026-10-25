@@ -22,9 +22,9 @@
         <td>{% if s.status == 'confirmed' %}<span class="pill pill-confirmed">Confirmada</span>
             {% else %}<span class="pill pill-cancelled">Revertida</span>{% endif %}</td>
         <td>
-          {% if s.status == 'confirmed' and g.user['role'] == 'admin' %}
+          {% if s.status == 'confirmed' and s.can_reverse %}
           <button class="btn btn-danger btn-sm" type="button"
-                  onclick="reverseSale({{ s.id }})">Revertir</button>
+                  data-reverse="{{ s.id }}">Revertir</button>
           {% endif %}
         </td>
       </tr>

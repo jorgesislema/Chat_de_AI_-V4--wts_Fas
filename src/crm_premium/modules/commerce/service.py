@@ -260,15 +260,27 @@ def stock_history(url, product_id, limit=50):
             return [row(r) for r in cur.fetchall()]
 
 
-def find_product_by_text(url, text):
-    """Búsqueda por nombre/SKU para el asistente (primer resultado)."""
+def find_product_by_text(url, text, branch_ids=None):
+    """Búsqueda por nombre/SKU para el asistente (primer resultado).
+
+    E01-R/A2: ``branch_ids`` acota a las sedes de inventory.view del usuario
+    (None = todas, director; lista vacía = nada en su ámbito).
+    """
     pattern = f'%{(text or "").strip().lower()}%'
+    sede = ''
+    sede_params = []
+    if branch_ids is not None:
+        if not branch_ids:
+            return None
+        marks = ', '.join(['%s'] * len(branch_ids))
+        sede = f' AND branch_id IN ({marks})'
+        sede_params.extend(sorted(set(int(b) for b in branch_ids)))
     with transaction(url) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT * FROM products
-                   WHERE is_active AND (lower(name) LIKE %s OR lower(sku) LIKE %s)
-                   ORDER BY name LIMIT 1""", (pattern, pattern))
+                f"""SELECT * FROM products
+                   WHERE is_active AND (lower(name) LIKE %s OR lower(sku) LIKE %s){sede}
+                   ORDER BY name LIMIT 1""", (pattern, pattern, *sede_params))
             return row(cur.fetchone())
 
 

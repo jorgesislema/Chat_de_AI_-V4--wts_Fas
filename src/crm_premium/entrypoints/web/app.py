@@ -108,6 +108,52 @@ def create_app(db_url=None):
         """Sedes consultables del usuario (None = todas, director)."""
         return g.scope.branch_filter() if g.scope else []
 
+    def branches_for(action):
+        """Sedes autorizadas PARA ESA ACCIÓN (E01-R/A2); None = todas.
+
+        Un usuario gerente en A y almacén en B recibe [A] para 'sales.view'
+        y [B] para 'inventory.manage': el filtro por membresía genérica
+        mezclaba roles y abría ventas de B.
+        """
+        return g.scope.branches_for(action) if g.scope else []
+
+    def _resource_branch(cur, resource_id):
+        cur.execute('SELECT branch_id FROM resources WHERE id=%s', (resource_id,))
+        found = cur.fetchone()
+        return found['branch_id'] if found else None
+
+    def _appointment_branch(appointment_id):
+        """Identidad mínima de la cita (sede) sin leer notas ni contenido."""
+        with _db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT branch_id FROM appointments WHERE id=%s',
+                            (appointment_id,))
+                found = cur.fetchone()
+        return found['branch_id'] if found else 'missing'
+
+    def _product_branch(product_id):
+        with _db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT branch_id FROM products WHERE id=%s',
+                            (product_id,))
+                found = cur.fetchone()
+        return found['branch_id'] if found else 'missing'
+
+    def _sale_branch(sale_id):
+        with _db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT branch_id FROM sales WHERE id=%s', (sale_id,))
+                found = cur.fetchone()
+        return found['branch_id'] if found else 'missing'
+
+    def _matrix_role(action, branch_id):
+        """'admin' si la MATRIZ autoriza la acción en esa sede, si no 'user'.
+
+        E01-R/A4: los servicios heredados exigen role='admin' de cuenta; la
+        ruta traduce el permiso real (acción+sede) sin pasarlo indiscriminadamente.
+        """
+        return 'admin' if g.scope.can(action, branch_id) else 'user'
+
     def require(action, branch_id=None):
         """Denegación por defecto: comprueba la matriz y devuelve respuesta
         de error si el alcance no autoriza (403 API / redirect web)."""
@@ -211,15 +257,23 @@ def create_app(db_url=None):
     @login_required
     def dashboard():
         profile = _load_profile(db())
-        data = dashboard_module.summary(db(), zone=profile['zone'])
+        # E01-R/A2: el panel respeta el ámbito por acción; sin sedes para la
+        # acción, ese bloque muestra cero (nunca el agregado global). El
+        # resumen sólo agrega citas (y un conteo de contactos sin contenido).
+        data = dashboard_module.summary(
+            db(), zone=profile['zone'],
+            appointment_branch_ids=branches_for('agenda.view'))
         return render_template('dashboard.html', profile=profile, summary=data)
 
     # ------------------------------------------------------------------ agenda
     @app.route('/agenda')
     @login_required
     def agenda_page():
+        denied = None if g.scope.can_any('agenda.view') else require('agenda.view')
+        if denied:
+            return denied
         profile = _load_profile(db())
-        branches = scope_branches()
+        branches = branches_for('agenda.view')
         resources = [r for r in scheduling.list_resources(db())
                      if r.get('branch_id') is None
                      or branches is None or r['branch_id'] in branches]
@@ -233,6 +287,9 @@ def create_app(db_url=None):
     @app.route('/api/agenda')
     @login_required
     def api_agenda():
+        denied = None if g.scope.can_any('agenda.view') else require('agenda.view')
+        if denied:
+            return denied
         profile = _load_profile(db())
         date_value = request.args.get('date')
         if not date_value:
@@ -249,7 +306,7 @@ def create_app(db_url=None):
                 resource=request.args.get('resource'),
                 status=request.args.get('status') or None,
                 include_cancelled=request.args.get('cancelled') == '1',
-                branch_ids=scope_branches())
+                branch_ids=branches_for('agenda.view'))
         except ValueError as exc:
             return jsonify(ok=False, code='invalid_range', message=str(exc)), 400
         for event in events:
@@ -300,6 +357,14 @@ def create_app(db_url=None):
     @app.route('/api/appointments/<int:appointment_id>')
     @login_required
     def api_appointment_detail(appointment_id):
+        # E01-R/A1: autorización por acción+sede ANTES de leer notas/historial.
+        branch = _appointment_branch(appointment_id)
+        if branch == 'missing':
+            return jsonify(ok=False, code='not_found',
+                           message='Cita no encontrada'), 404
+        denied = require('agenda.view', branch)
+        if denied:
+            return denied
         result = scheduling.appointment_detail(
             db(), appointment_id=appointment_id, role=g.user['role'])
         if not result['ok']:
@@ -310,6 +375,14 @@ def create_app(db_url=None):
                 local_parts(result['appointment'][key], profile['zone'])
         return jsonify(result)
 
+    #: Acción de transición → acción de matriz exigida sobre la sede de la cita.
+    TRANSITION_ACTIONS = {
+        'confirm': 'agenda.transition', 'cancel': 'agenda.transition',
+        'attend': 'agenda.transition', 'no_show': 'agenda.transition',
+        'reprogram': 'agenda.transition', 'note': 'agenda.transition',
+        'correct': 'agenda.admin_correct',
+    }
+
     @app.route('/api/appointments/<int:appointment_id>/transition', methods=['POST'])
     @login_required
     def api_transition(appointment_id):
@@ -318,6 +391,20 @@ def create_app(db_url=None):
         profile = _load_profile(db())
         data = request.get_json(silent=True) or {}
         action = data.get('action')
+        required = TRANSITION_ACTIONS.get(action)
+        if not required:
+            # E01-R/A1: acciones desconocidas se deniegan siempre.
+            return jsonify(ok=False, code='invalid_action',
+                           message='Acción no válida'), 400
+        # E01-R/A1: identidad mínima de la cita y guardia de matriz ANTES de
+        # tocar el servicio; el actor/sede vienen de la sesión, no del JSON.
+        branch = _appointment_branch(appointment_id)
+        if branch == 'missing':
+            return jsonify(ok=False, code='not_found',
+                           message='Cita no encontrada'), 404
+        denied = require(required, branch)
+        if denied:
+            return denied
         common = dict(appointment_id=appointment_id, actor=g.user['id'],
                       expected_version=data.get('expected_version'))
         service = scheduling
@@ -340,11 +427,14 @@ def create_app(db_url=None):
                 role=g.user['role'],
                 window_policy=organization.build_window_policy(profile))
         elif action == 'correct':
+            # E01-R/A2: la matriz (director/gerente en esa sede) decide el
+            # rol de servicio; el rol de cuenta solo ya no basta.
             result = service.admin_correct_status(
                 db(), appointment_id=appointment_id, target=data.get('target'),
                 reason=data.get('reason'),
                 expected_version=data.get('expected_version'),
-                actor=g.user['id'], role=g.user['role'])
+                actor=g.user['id'],
+                role=_matrix_role('agenda.admin_correct', branch))
         elif action == 'note':
             result = service.add_note(db(), appointment_id=appointment_id,
                                       body=data.get('body'), author=g.user['id'])
@@ -359,6 +449,11 @@ def create_app(db_url=None):
     @app.route('/contacts')
     @login_required
     def contacts_page():
+        # E01-R/A1: los contactos son PII; sin membresía con clients.view no
+        # se lista nada (denegación por defecto).
+        denied = None if g.scope.can_any('clients.view') else require('clients.view')
+        if denied:
+            return denied
         q = request.args.get('q', '')
         page = max(1, int(request.args.get('page', 1) or 1))
         result = contacts_module.list_contacts(
@@ -368,6 +463,9 @@ def create_app(db_url=None):
     @app.route('/contacts', methods=['POST'])
     @login_required
     def contacts_create():
+        denied = None if g.scope.can_any('clients.edit') else require('clients.edit')
+        if denied:
+            return denied
         if not _csrf_ok():
             return render_template('contacts.html', q='', page=1,
                                    listing=contacts_module.list_contacts(db()),
@@ -388,8 +486,14 @@ def create_app(db_url=None):
         contact = contacts_module.get(db(), contact_id)
         if not contact:
             return redirect(url_for('contacts_page'))
+        # E01-R/A1: el perfil del contacto no revela citas fuera del ámbito
+        # agenda.view del usuario (ni notas: el listado no las incluye).
+        denied = None if g.scope.can_any('clients.view') else require('clients.view')
+        if denied:
+            return denied
         appointments = scheduling.appointments_for_contact(
-            db(), contact_id=contact_id, limit=50)
+            db(), contact_id=contact_id, limit=50,
+            branch_ids=branches_for('agenda.view'))
         return render_template('contact_detail.html', contact=contact,
                                appointments=appointments,
                                status_labels=scheduling.STATUS_LABELS)
@@ -486,6 +590,9 @@ def create_app(db_url=None):
     @app.route('/api/contacts/search')
     @login_required
     def api_contacts_search():
+        denied = None if g.scope.can_any('clients.view') else require('clients.view')
+        if denied:
+            return denied
         q = (request.args.get('q') or '').strip()
         if not q:
             return jsonify(ok=True, items=[])
@@ -572,8 +679,12 @@ def create_app(db_url=None):
         denied = None if g.scope.can_any('sales.view') else require('sales.view')
         if denied:
             return denied
-        branches = scope_branches()
+        # E01-R/A2: sólo sedes autorizadas para sales.view (no cualquier
+        # membresía): gerente A / almacén B no ve ventas de B.
+        branches = branches_for('sales.view')
         sales = commerce.list_sales(db(), limit=50, branch_ids=branches)
+        for sale in sales:
+            sale['can_reverse'] = g.scope.can('sales.reverse', sale['branch_id'])
         products = commerce.list_products(db(), branch_ids=branches)
         branch_objs = [b for b in scope_service.list_branches(db())
                        if branches is None or b['id'] in branches]
@@ -595,8 +706,8 @@ def create_app(db_url=None):
                 return jsonify(ok=False, code='invalid_branch',
                                message='Sede no válida'), 400
         else:
-            mine = scope_branches()
-            branch_id = mine[0] if mine and len(mine) == 1 else None
+            sellable = branches_for('sales.create')
+            branch_id = sellable[0] if sellable and len(sellable) == 1 else None
         if not g.scope.allowed(branch_id):
             return jsonify(ok=False, code='forbidden',
                            message='Sede fuera de su ámbito'), 403
@@ -617,10 +728,19 @@ def create_app(db_url=None):
     def api_reverse_sale(sale_id):
         if not _csrf_ok():
             return jsonify(ok=False, code='csrf', message='Token CSRF no válido'), 403
+        # E01-R/A1/A2: identidad mínima de la venta y guardia por sede.
+        branch = _sale_branch(sale_id)
+        if branch == 'missing':
+            return jsonify(ok=False, code='not_found',
+                           message='Venta no encontrada'), 404
+        denied = require('sales.reverse', branch)
+        if denied:
+            return denied
         data = request.get_json(silent=True) or {}
         result = commerce.reverse_sale(
             db(), sale_id=sale_id, reason=data.get('reason'),
-            actor=g.user['id'], role=g.user['role'])
+            actor=g.user['id'],
+            role=_matrix_role('sales.reverse', branch))
         if not result['ok']:
             return _api_error(result)
         return jsonify(result)
@@ -632,21 +752,43 @@ def create_app(db_url=None):
         denied = None if g.scope.can_any('inventory.view') else require('inventory.view')
         if denied:
             return denied
-        branches = scope_branches()
+        # E01-R/A2/A4: sedes de inventory.view; capacidades por producto
+        # según la matriz en LA SEDE del producto (no rol de cuenta global).
+        branches = branches_for('inventory.view')
         products = commerce.list_products(db(), include_inactive=True,
                                           branch_ids=branches)
+        for product in products:
+            product['can_price'] = g.scope.can('inventory.price',
+                                               product['branch_id'])
+            product['can_manage'] = g.scope.can('inventory.manage',
+                                                product['branch_id'])
         return render_template('inventory.html', products=products,
                                saved=request.args.get('saved') == '1',
                                is_admin=g.scope.is_director,
-                               can_manage=g.scope.can('inventory.manage'),
-                               branches=branches)
+                               can_manage=g.scope.is_director or any(
+                                   p['can_manage'] for p in products),
+                               branches=branches,
+                               branch_objs=[b for b in
+                                            scope_service.list_branches(db())
+                                            if branches is None
+                                            or b['id'] in branches])
 
     @app.route('/inventory/products', methods=['POST'])
     @login_required
     def inventory_create():
         if not _csrf_ok():
             return jsonify(ok=False, code='csrf', message='Token CSRF no válido'), 403
-        denied = require('inventory.manage')
+        branch_raw = request.form.get('branch_id')
+        try:
+            branch_id = int(branch_raw) if branch_raw else None
+        except (TypeError, ValueError):
+            return jsonify(ok=False, code='invalid_branch',
+                           message='Sede no válida'), 400
+        if branch_id is None:
+            manageable = branches_for('inventory.manage')
+            branch_id = manageable[0] if manageable and len(manageable) == 1 else 1
+        # E01-R/A4: alta de producto en una sede concreta del ámbito.
+        denied = require('inventory.manage', branch_id)
         if denied:
             return denied
         result = commerce.create_product(
@@ -655,9 +797,12 @@ def create_app(db_url=None):
             category=request.form.get('category'),
             price=request.form.get('price'), cost=request.form.get('cost'),
             stock=request.form.get('stock', 0),
-            min_stock=request.form.get('min_stock', 0), actor=g.user['id'])
+            min_stock=request.form.get('min_stock', 0), actor=g.user['id'],
+            branch_id=branch_id)
         if not result['ok']:
-            products = commerce.list_products(db(), include_inactive=True)
+            products = commerce.list_products(
+                db(), include_inactive=True, branch_ids=branches_for(
+                    'inventory.view'))
             return render_template('inventory.html', products=products,
                                    error=result['message']), 400
         return redirect(url_for('inventory_page', saved=1))
@@ -667,13 +812,18 @@ def create_app(db_url=None):
     def inventory_price(product_id):
         if not _csrf_ok():
             return jsonify(ok=False, code='csrf', message='Token CSRF no válido'), 403
-        denied = require('inventory.price')
+        branch = _product_branch(product_id)
+        if branch == 'missing':
+            return jsonify(ok=False, code='not_found',
+                           message='Producto no encontrado'), 404
+        # E01-R/A4: precio es acción de director en la sede del producto.
+        denied = require('inventory.price', branch)
         if denied:
             return denied
         result = commerce.change_price(
             db(), product_id=product_id, new_price=request.form.get('price'),
             reason=request.form.get('reason'), actor=g.user['id'],
-            role='admin')
+            role=_matrix_role('inventory.price', branch))
         if not result['ok']:
             return _api_error(result)
         return redirect(url_for('inventory_page', saved=1))
@@ -683,12 +833,19 @@ def create_app(db_url=None):
     def inventory_stock(product_id):
         if not _csrf_ok():
             return jsonify(ok=False, code='csrf', message='Token CSRF no válido'), 403
-        denied = require('inventory.manage')
+        branch = _product_branch(product_id)
+        if branch == 'missing':
+            return jsonify(ok=False, code='not_found',
+                           message='Producto no encontrado'), 404
+        # E01-R/A4: el almacén ajusta cantidad sólo de SU sede (el producto
+        # de otra sede no pasa la guardia); precio/costo no se tocan aquí.
+        denied = require('inventory.manage', branch)
         if denied:
             return denied
         result = commerce.adjust_stock(
             db(), product_id=product_id, delta=request.form.get('delta'),
-            note=request.form.get('note'), actor=g.user['id'], role='admin')
+            note=request.form.get('note'), actor=g.user['id'],
+            role=_matrix_role('inventory.manage', branch))
         if not result['ok']:
             return _api_error(result)
         return redirect(url_for('inventory_page', saved=1))
@@ -698,10 +855,15 @@ def create_app(db_url=None):
     def inventory_toggle(product_id):
         if not _csrf_ok():
             return jsonify(ok=False, code='csrf', message='Token CSRF no válido'), 403
-        denied = require('inventory.manage')
+        branch = _product_branch(product_id)
+        if branch == 'missing':
+            return jsonify(ok=False, code='not_found',
+                           message='Producto no encontrado'), 404
+        denied = require('inventory.manage', branch)
         if denied:
             return denied
-        products = commerce.list_products(db(), include_inactive=True)
+        products = commerce.list_products(
+            db(), include_inactive=True, branch_ids=branches_for('inventory.view'))
         current = next((p for p in products if p['id'] == product_id), None)
         if not current:
             return _api_error({'code': 'not_found', 'message': 'Producto no encontrado'})
@@ -714,6 +876,16 @@ def create_app(db_url=None):
     @app.route('/inventory/products/<int:product_id>/history')
     @login_required
     def inventory_history(product_id):
+        # E01-R/A2: endpoint JSON (lo consume inventory.js); la denegación
+        # es 403 JSON consistente, no redirect de formulario.
+        branch = _product_branch(product_id)
+        if branch == 'missing':
+            return jsonify(ok=False, code='not_found',
+                           message='Producto no encontrado'), 404
+        if not g.scope.can('inventory.view', branch):
+            return jsonify(ok=False, code='forbidden',
+                           message='Sin permiso para el historial de este '
+                                   'producto en su sede'), 403
         return jsonify(ok=True,
                        prices=commerce.price_history(db(), product_id),
                        stock=commerce.stock_history(db(), product_id))
@@ -738,11 +910,18 @@ def create_app(db_url=None):
     @app.route('/api/analytics/overview')
     @login_required
     def api_analytics_overview():
+        # E01-R/A2: guardia explícita y ámbito por acción en la API BI
+        # (antes devolvía el agregado global a cualquier usuario autenticado).
+        denied = None if g.scope.can_any('analytics.view') else require('analytics.view')
+        if denied:
+            return denied
         profile = _load_profile(db())
         days = int(request.args.get('days', 30) or 30)
         days = max(7, min(days, 90))
         return jsonify(ok=True,
-                       data=analytics.overview(db(), profile['zone'], days=days))
+                       data=analytics.overview(db(), profile['zone'], days=days,
+                                               branch_ids=branches_for(
+                                                   'analytics.view')))
 
     @app.route('/analytics/rebuild', methods=['POST'])
     @admin_required
@@ -780,10 +959,16 @@ def create_app(db_url=None):
         profile = _load_profile(db())
         include_demo = data.get('include_demo') is True and \
             g.user['role'] == 'admin'
+        # E01-R/A2: cada herramienta consulta con el ámbito de SU acción;
+        # nunca con el filtro genérico de membresías.
         result = assistant.ask(db(), question=data.get('question'),
                                user_id=g.user['id'], zone=profile['zone'],
                                include_demo=include_demo,
-                               branch_ids=scope_branches())
+                               branches={
+                                   'sales': branches_for('sales.view'),
+                                   'agenda': branches_for('agenda.view'),
+                                   'inventory': branches_for('inventory.view'),
+                               })
         if not result['ok']:
             return _api_error({**result, 'code': result.get('code', 'invalid')})
         return jsonify(result)

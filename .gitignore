@@ -16,3 +16,4 @@ dist/
 backups/
 data/
 logs/
+.pytest_pg/

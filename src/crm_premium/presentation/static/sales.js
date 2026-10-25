@@ -127,15 +127,19 @@
     });
   });
 
-  window.reverseSale = function (saleId) {
-    var reason = prompt('Motivo de la reversión (auditado):');
+  /* E01-R/A4: reversión por delegación con motivo inline (sin prompt ni
+     handler inline; CSP script-src 'self'). */
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-reverse]');
+    if (!button) return;
+    var reason = window.prompt('Motivo de la reversión (auditado):');
     if (reason === null) return;
-    window.crmApi('/api/sales/' + saleId + '/reverse', {
+    window.crmApi('/api/sales/' + button.getAttribute('data-reverse') + '/reverse', {
       method: 'POST',
       body: JSON.stringify({reason: reason})
     }).then(function (res) {
       if (res.ok) location.reload();
       else alert(res.data.message || 'No se pudo revertir');
     });
-  };
+  });
 })();

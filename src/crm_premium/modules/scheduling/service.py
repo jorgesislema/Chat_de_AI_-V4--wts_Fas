@@ -524,16 +524,29 @@ def list_appointments(url, *, start_utc, end_utc, resource=None, status=None,
     return [row(r) for r in rows]
 
 
-def appointments_for_contact(url, *, contact_id, limit=50):
-    """Historial de citas de un contacto (incluye canceladas)."""
+def appointments_for_contact(url, *, contact_id, limit=50, branch_ids=None):
+    """Historial de citas de un contacto (incluye canceladas).
+
+    E01-R/A1: ``branch_ids`` acota a las sedes agenda.view del usuario; el
+    perfil del contacto no revela citas de sedes ajenas (None = todas,
+    director; lista vacía = ninguna).
+    """
+    sede = ''
+    sede_params = []
+    if branch_ids is not None:
+        if not branch_ids:
+            return []
+        marks = ', '.join(['%s'] * len(branch_ids))
+        sede = f' AND a.branch_id IN ({marks})'
+        sede_params.extend(sorted(set(int(b) for b in branch_ids)))
     with transaction(url) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT a.*, r.name AS resource_name
+                f"""SELECT a.*, r.name AS resource_name
                    FROM appointments a JOIN resources r ON r.id = a.resource_id
-                   WHERE a.contact_id = %s
+                   WHERE a.contact_id = %s{sede}
                    ORDER BY a.start_utc DESC LIMIT %s""",
-                (contact_id, max(1, min(int(limit), 200))))
+                (contact_id, *sede_params, max(1, min(int(limit), 200))))
             return [row(r) for r in cur.fetchall()]
 
 

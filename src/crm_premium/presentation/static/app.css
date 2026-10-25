@@ -321,3 +321,7 @@ body.app {
   * { transition: none !important; }
 }
 
+/* E01-R/A4: utilidades y rango KPI (antes style= inline, CSP). */
+.mt-16 { margin-top: 16px; }
+.mt-14 { margin-top: 14px; }
+.kpi-range { font-size: 1.1rem; }

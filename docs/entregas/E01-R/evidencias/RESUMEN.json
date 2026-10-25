@@ -1,0 +1,14 @@
+{
+  "casos": {
+    "guardar_sin_cliente_desde_celda_1400": "ok",
+    "guardar_con_cliente_por_id_y_servicio": "ok",
+    "fixture_2030_1400_1430_persistido": "ok",
+    "cita_49h_y_medianoche_api": "ok",
+    "inventario_botones_reales_csp": "ok",
+    "capturas_360_768_1440": "ok"
+  },
+  "fallos": [],
+  "consola_errores": 0,
+  "base_temporal": "e01r_evidencia_ff2e721f",
+  "zona": "America/Guayaquil"
+}

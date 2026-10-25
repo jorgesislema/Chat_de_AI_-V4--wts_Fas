@@ -35,6 +35,23 @@
     });
   };
 
+  // E01-R/A4: gráficos de barras vía data-* + CSSOM tipado. El atributo
+  // style="height/width:...%" renderizado por la plantilla viola
+  // style-src 'self' y dejaba las barras a altura cero.
+  function applyBars() {
+    document.querySelectorAll('[data-bar-h]').forEach(function (el) {
+      el.style.height = el.getAttribute('data-bar-h') + '%';
+    });
+    document.querySelectorAll('[data-bar-w]').forEach(function (el) {
+      el.style.width = el.getAttribute('data-bar-w') + '%';
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyBars);
+  } else {
+    applyBars();
+  }
+
   window.crmFormat = {
     localInput: function (isoDate, time) {
       return isoDate + 'T' + time;

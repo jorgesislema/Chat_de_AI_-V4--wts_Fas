@@ -76,6 +76,18 @@ class ScopeContext:
         """Lista de sedes consultables; None = todas (director)."""
         return None if self.is_director else sorted(self.branches)
 
+    def branches_for(self, action):
+        """Sedes autorizadas PARA ESA ACCIÓN (E01-R/A2); None = todas.
+
+        Corrige el cruce de roles: un usuario gerente en A y almacén en B
+        obtiene [A] para 'sales.view' y [B] para 'inventory.manage'; el filtro
+        genérico branch_filter() mezclaba ambas y abría ventas de B.
+        """
+        roles = ACTION_ROLES.get(action, ())
+        if self.is_director:
+            return None
+        return sorted(b for b, r in self.role_at.items() if r in roles)
+
     def can_any(self, action):
         """Vista del recurso en ALGUNA sede del ámbito (p. ej. listados)."""
         roles = ACTION_ROLES.get(action, ())
@@ -154,7 +166,14 @@ def list_assignments(url, user_id=None):
 
 def ensure_principal(url, zone='UTC'):
     """E01-M: sede «Principal» id=1 garantizada (idempotente) y re-backfill
-    de filas sin sede. Se invoca desde organization.ensure()."""
+    de filas sin sede. Se invoca desde organization.ensure().
+
+    E01-R/A3: ya NO concede ámbitos (user_branch_roles). El backfill de
+    permisos es operación única de las migraciones 0006/0007 (con
+    procedencia); reparar permisos durante un GET podría reponer un ámbito
+    revocado. Un usuario nuevo sin asignación sigue sin acceso (denegación
+    por defecto); los ámbitos se asignan explícitamente en /branches.
+    """
     with transaction(url) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -169,18 +188,6 @@ def ensure_principal(url, zone='UTC'):
                           'stock_movements'):
                 cur.execute(f'UPDATE {table} SET branch_id = 1 '
                             'WHERE branch_id IS NULL')
-            cur.execute(
-                """INSERT INTO user_branch_roles (user_id, branch_id, scope_role)
-                   SELECT u.id, NULL, 'director' FROM users u
-                   WHERE u.role = 'admin'
-                     AND NOT EXISTS (SELECT 1 FROM user_branch_roles r
-                                     WHERE r.user_id = u.id)""")
-            cur.execute(
-                """INSERT INTO user_branch_roles (user_id, branch_id, scope_role)
-                   SELECT u.id, 1, 'asesor' FROM users u
-                   WHERE u.role <> 'admin'
-                     AND NOT EXISTS (SELECT 1 FROM user_branch_roles r
-                                     WHERE r.user_id = u.id)""")
             cur.execute(
                 """INSERT INTO bi.dim_sede (branch_id, nombre)
                    SELECT id, name FROM branches
