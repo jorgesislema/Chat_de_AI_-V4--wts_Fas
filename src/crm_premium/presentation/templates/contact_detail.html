@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}{{ contact.full_name }} — CRM Premium{% endblock %}
+{% block pagetitle %}Contacto{% endblock %}
+{% block content %}
+<div class="split-2">
+  <div class="card">
+    <h2 class="card-title">{{ contact.full_name }}</h2>
+    <dl class="detail-list">
+      <dt>Teléfono</dt><dd>{{ contact.phone or '—' }}</dd>
+      <dt>Correo</dt><dd>{{ contact.email or '—' }}</dd>
+      <dt>Canal</dt><dd>{{ contact.channel or '—' }}</dd>
+      <dt>Notas internas</dt><dd>{{ contact.notes or '—' }}</dd>
+      <dt>Alta</dt><dd>{{ contact.created_at[:19] }}</dd>
+    </dl>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('contacts_page') }}">‹ Volver</a>
+  </div>
+  <div class="card">
+    <h2 class="card-title">Historial de citas</h2>
+    {% if appointments %}
+    <table class="table">
+      <thead><tr><th>Inicio</th><th>Título</th><th>Recurso</th><th>Estado</th></tr></thead>
+      <tbody>
+        {% for a in appointments %}
+        <tr>
+          <td>{{ a.start_utc[:16].replace('T', ' ') }}</td>
+          <td>{{ a.title }}</td>
+          <td>{{ a.resource_name }}</td>
+          <td><span class="pill pill-{{ a.operational_status }}">{{ status_labels[a.operational_status] }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">Este contacto aún no tiene citas.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

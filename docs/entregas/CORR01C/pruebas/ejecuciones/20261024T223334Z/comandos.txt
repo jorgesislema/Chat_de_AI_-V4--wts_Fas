@@ -1,0 +1,6 @@
+# Comandos (credenciales sólo por variable de entorno privada; nunca literales)
+# export CRM_PREMIUM_TEST_URL=[REDACTADO-credenciales-DB]@<servidor-pruebas>:5433/postgres?connect_timeout=5
+# 1) pytest tests/ -o addopts= -v --tb=short   (suite_completa.txt)
+# 2) python scripts/dev/smoke_packaging.py     (wheel_externo.txt)
+# 3) sha256sum /tmp/crm_premium_wheel/*.whl    (wheel_sha256.txt)
+# 4) python tools/redact_evidencia.py --check docs/entregas  (revision_evidencia.txt)

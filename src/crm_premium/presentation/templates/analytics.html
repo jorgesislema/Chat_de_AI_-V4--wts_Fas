@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block title %}Analítica — CRM Premium{% endblock %}
+{% block pagetitle %}Analítica{% endblock %}
+{% block topbarRight %}
+<form method="get" class="inline-form" id="daysForm">
+  <select class="input input-sm" name="days" onchange="this.form.submit()">
+    <option value="7" {% if data.dias == 7 %}selected{% endif %}>7 días</option>
+    <option value="30" {% if data.dias == 30 %}selected{% endif %}>30 días</option>
+    <option value="90" {% if data.dias == 90 %}selected{% endif %}>90 días</option>
+  </select>
+</form>
+{% endblock %}
+{% block content %}
+{% if rebuilt %}<div class="alert alert-ok" role="status">Base analítica reconstruida desde la operación.</div>{% endif %}
+
+<section class="kpi-grid">
+  <div class="card kpi"><span class="kpi-label">Ventas netas</span>
+    <span class="kpi-value">{{ '%.2f'|format(data.kpis.ventas_netas) }}</span>
+    <span class="kpi-sub">{{ data.kpis.num_ventas }} ventas · {{ data.kpis.unidades }} unidades</span></div>
+  <div class="card kpi"><span class="kpi-label">Ticket medio</span>
+    <span class="kpi-value">{% if data.kpis.ticket_medio is not none %}{{ '%.2f'|format(data.kpis.ticket_medio) }}{% else %}—{% endif %}</span>
+    <span class="kpi-sub">por venta confirmada</span></div>
+  <div class="card kpi"><span class="kpi-label">Asistencia</span>
+    <span class="kpi-value">{% if data.kpis.asistencia_rate is not none %}{{ (data.kpis.asistencia_rate * 100)|round(1) }}%{% else %}—{% endif %}</span>
+    <span class="kpi-sub">citas cerradas del período</span></div>
+  <div class="card kpi"><span class="kpi-label">Período</span>
+    <span class="kpi-value" style="font-size:1.1rem">{{ data.desde }} → {{ data.hasta }}</span>
+    <span class="kpi-sub">zona {{ data.zona }}</span></div>
+</section>
+
+<section class="panel-grid">
+  <div class="card chart-card">
+    <h2 class="card-title">Ventas netas por día</h2>
+    {% set max_neto = data.ventas_por_dia|map(attribute='neto')|max if data.ventas_por_dia else 0 %}
+    <div class="chart-bars">
+      {% for d in data.ventas_por_dia %}
+      <div class="bar-col" title="{{ d.dia }}: {{ '%.2f'|format(d.neto) }}">
+        <span class="bar-value">{% if d.neto %}{{ '%.0f'|format(d.neto) }}{% endif %}</span>
+        <span class="bar" style="height: {{ ((d.neto / (max_neto if max_neto else 1)) * 100)|round(1) }}%"></span>
+        <span class="bar-label">{{ d.dia[8:10] if d.dia|length > 8 else '' }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card chart-card">
+    <h2 class="card-title">Horas de más tráfico (citas)</h2>
+    {% set max_h = data.horas_pico_citas|map(attribute='citas')|max if data.horas_pico_citas else 0 %}
+    <div class="chart-bars small">
+      {% for h in data.horas_pico_citas %}
+      <div class="bar-col" title="{{ '%02d'|format(h.hora) }}:00 — {{ h.citas }} cita(s)">
+        <span class="bar {% if h.citas == max_h and max_h > 0 %}bar-today{% endif %}" style="height: {{ ((h.citas / (max_h if max_h else 1)) * 100)|round(1) }}%"></span>
+        <span class="bar-label">{{ '%02d'|format(h.hora) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="muted footnote">Hora local del negocio; la barra ámbar marca la hora pico.</p>
+  </div>
+
+  <div class="card chart-card">
+    <h2 class="card-title">Tratamientos más vendidos (ingresos)</h2>
+    <ul class="status-list">
+      {% set max_s = data.top_servicios|map(attribute='value')|max if data.top_servicios else 0 %}
+      {% for item in data.top_servicios %}
+      <li class="status-row">
+        <span class="status-name">{{ item.label }}</span>
+        <span class="status-track"><span class="status-fill" style="width: {{ ((item.value / (max_s if max_s else 1)) * 100)|round(1) }}%"></span></span>
+        <span class="status-n">{{ item.unidades }}u</span>
+      </li>
+      {% else %}<li class="muted">Sin ventas de servicios en el período.</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="card chart-card">
+    <h2 class="card-title">Productos más vendidos (ingresos)</h2>
+    <ul class="status-list">
+      {% set max_p = data.top_productos|map(attribute='value')|max if data.top_productos else 0 %}
+      {% for item in data.top_productos %}
+      <li class="status-row">
+        <span class="status-name">{{ item.label }}</span>
+        <span class="status-track"><span class="status-fill fill-accent" style="width: {{ ((item.value / (max_p if max_p else 1)) * 100)|round(1) }}%"></span></span>
+        <span class="status-n">{{ item.unidades }}u</span>
+      </li>
+      {% else %}<li class="muted">Sin ventas de productos en el período.</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="card chart-card">
+    <h2 class="card-title">Ingresos por categoría</h2>
+    <ul class="status-list">
+      {% set max_c = data.categorias|map(attribute='value')|max if data.categorias else 0 %}
+      {% for item in data.categorias %}
+      <li class="status-row">
+        <span class="status-name">{{ item.label }}</span>
+        <span class="status-track"><span class="status-fill" style="width: {{ ((item.value / (max_c if max_c else 1)) * 100)|round(1) }}%"></span></span>
+        <span class="status-n">{{ '%.0f'|format(item.value) }}</span>
+      </li>
+      {% else %}<li class="muted">Sin categorías con ventas.</li>
+      {% endfor %}
+    </ul>
+    <p class="muted footnote">Análisis de cartera interna; el análisis de mercado
+    con fuentes externas se activa cargando datos en la fase F14.</p>
+  </div>
+
+  <div class="card chart-card">
+    <h2 class="card-title">Citas por estado (período)</h2>
+    <ul class="status-list">
+      {% set max_e = data.estados|map(attribute='value')|max if data.estados else 0 %}
+      {% for e in data.estados %}
+      <li class="status-row">
+        <span class="status-name status-{{ e.codigo }}">{{ e.label }}</span>
+        <span class="status-track"><span class="status-fill status-{{ e.codigo }}" style="width: {{ ((e.value / (max_e if max_e else 1)) * 100)|round(1) }}%"></span></span>
+        <span class="status-n">{{ e.value }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+<div class="toolbar">
+  <span class="muted">Última reconstrucción del modelo estrella:
+    {{ data.ultima_reconstruccion[:19]|replace('T',' ') if data.ultima_reconstruccion else 'nunca' }}</span>
+  {% if g.user['role'] == 'admin' %}
+  <form method="post" action="{{ url_for('analytics_rebuild') }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ g.session['csrf_token'] }}">
+    <button class="btn btn-primary btn-sm" type="submit">Reconstruir analítica</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

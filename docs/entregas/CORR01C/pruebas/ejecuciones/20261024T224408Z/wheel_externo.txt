@@ -1,0 +1,18 @@
+# smoke con wheel RECONSTRUIDO e instalado en venv externo: /tmp/corr01c_pack_venv
+# install exit: 0
+encies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: crm-premium
+  Building wheel for crm-premium (pyproject.toml): started
+  Building wheel for crm-premium (pyproject.toml): finished with status 'done'
+  Created wheel for crm-premium: filename=crm_premium-0.1.0-py3-none-any.whl size=87231 sha256=9c7b055e08e9c355d390d140a0ef80d07afe01e6f18d4dd2be045b26f0ef81ae
+  Stored in directory: C:\Users\jrgsi\AppData\Local\Temp\pip-ephem-wheel-cache-5846idbw\wheels\d8\c4\5b\6da7517f93f1c315317e5d4315d677d78a5c96dade93b9ddff
+Successfully built crm-premium
+wheel: crm_premium-0.1.0-py3-none-any.whl
+SMOKE OK (paquete instalado en C:\Users\jrgsi\AppData\Local\Temp\corr01c_pack_venv\Lib\site-packages\crm_premium)
+exit smoke: 0
+# NOTA: wheel reconstruido tras testdsns.py; hash en wheel_sha256.txt corresponde al wheel de esta revisión:
+9c7b055e08e9c355d390d140a0ef80d07afe01e6f18d4dd2be045b26f0ef81ae */tmp/crm_

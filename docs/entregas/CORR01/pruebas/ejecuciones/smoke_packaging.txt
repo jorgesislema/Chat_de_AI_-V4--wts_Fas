@@ -1,0 +1,1 @@
+SMOKE OK: migraciones empaquetadas, login renderizado, estáticos servidos.

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crm-premium"
+version = "0.1.0"
+description = "CRM Premium multirrubro — edición 2000+ (Agente de reserva V4)"
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.1",
+    "psycopg[binary]>=3.2",
+    "python-dotenv>=1.0",
+    "tzdata>=2025.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[project.scripts]
+crm-premium = "crm_premium.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# CORR01/R10: plantillas, estáticos y migraciones viajan dentro del wheel;
+# una instalación fuera del checkout debe poder arrancar y migrar.
+[tool.setuptools.package-data]
+crm_premium = [
+    "presentation/templates/*.html",
+    "presentation/static/*",
+    "migrations/operational/*.sql",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

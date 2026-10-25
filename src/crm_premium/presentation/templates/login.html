@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iniciar sesión — CRM Premium</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="login-body">
+<div class="login-card">
+  <div class="login-brand">
+    <span class="brand-mark big">◆</span>
+    <h1>CRM <strong>Premium</strong></h1>
+    <p class="muted">Atención, agenda e inteligencia comercial</p>
+  </div>
+  {% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ url_for('login') }}" class="login-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label for="username">Usuario</label>
+    <input id="username" name="username" type="text" autocomplete="username"
+           required autofocus maxlength="40">
+    <label for="password">Contraseña</label>
+    <input id="password" name="password" type="password"
+           autocomplete="current-password" required>
+    <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+  </form>
+  <p class="login-footnote muted">Acceso personal e intransferible. Las sesiones quedan
+  registradas por seguridad y pueden ser revocadas por el administrador.</p>
+</div>
+</body>
+</html>

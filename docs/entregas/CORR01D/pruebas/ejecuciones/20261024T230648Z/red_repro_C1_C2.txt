@@ -1,0 +1,8 @@
+=== C2: derivación temporal ===
+admin application_name: 'crm tests'
+temporal application_name: 'crm+tests'
+C2 FALLO (esperado igual a "crm tests" en temporal): True
+
+=== C1: _fingerprint_bi truncada ===
+asignación de huella indentada DENTRO del bucle: False
+C1 FALLO (asignación fuera del bucle => sólo última tabla): True

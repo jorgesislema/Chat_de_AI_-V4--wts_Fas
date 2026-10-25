@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Ventas — CRM Premium{% endblock %}
+{% block pagetitle %}Ventas{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <button class="btn btn-primary" id="newSaleBtn" type="button">＋ Nueva venta</button>
+  <span class="muted" id="salesCount">{{ sales|length }} venta(s) recientes</span>
+</div>
+<div class="card">
+  <h2 class="card-title">Ventas registradas</h2>
+  <table class="table" id="salesTable">
+    <thead><tr><th>Venta</th><th>Fecha</th><th>Contacto</th><th>Líneas</th><th>Total</th><th>Pago</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+      {% for s in sales %}
+      <tr>
+        <td><strong>V{{ '%06d'|format(s.id) }}</strong></td>
+        <td>{{ s.created_at[:16]|replace('T',' ') }}</td>
+        <td>{{ s.contact_name or '—' }}</td>
+        <td>{{ s.lines }}</td>
+        <td>{{ '%.2f'|format(s.total) }}</td>
+        <td>{{ s.payment_method }}</td>
+        <td>{% if s.status == 'confirmed' %}<span class="pill pill-confirmed">Confirmada</span>
+            {% else %}<span class="pill pill-cancelled">Revertida</span>{% endif %}</td>
+        <td>
+          {% if s.status == 'confirmed' and g.user['role'] == 'admin' %}
+          <button class="btn btn-danger btn-sm" type="button"
+                  onclick="reverseSale({{ s.id }})">Revertir</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="muted">Sin ventas todavía.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<dialog id="saleDialog" class="dialog">
+  <div class="dialog-head">
+    <h3>Nueva venta</h3>
+    <button class="btn-icon" id="saleClose" type="button" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="dialog-body">
+    <div class="sale-lines" id="saleLines">
+      <div class="sale-line">
+        <select class="input product-select"></select>
+        <input class="input input-sm qty-input" type="number" min="1" value="1">
+        <span class="line-total muted">0.00</span>
+        <button class="btn-icon remove-line" type="button" aria-label="Quitar línea">✕</button>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="addLine" type="button">＋ Añadir artículo</button>
+    <div class="sale-summary">
+      <label for="paymentMethod">Método de pago</label>
+      <select class="input" id="paymentMethod">
+        <option value="efectivo">Efectivo</option>
+        <option value="tarjeta">Tarjeta</option>
+        <option value="transferencia">Transferencia</option>
+      </select>
+      <label for="saleContact">Cliente (opcional — busque y seleccione)</label>
+      <input class="input" id="saleContact" list="saleContactOptions"
+             autocomplete="off" placeholder="Escriba nombre o teléfono…">
+      <datalist id="saleContactOptions"></datalist>
+      {% if branches and branches|length > 1 %}
+      <label for="saleBranch">Sede</label>
+      <select class="input" id="saleBranch">
+        {% for b in branch_objs %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+      </select>
+      {% endif %}
+      <label for="saleNote">Nota (opcional)</label>
+      <input class="input" id="saleNote" maxlength="300">
+      <div class="sale-total">Total: <strong id="saleTotal">0.00</strong></div>
+    </div>
+    <p id="saleError" class="alert alert-error hidden" role="alert"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" id="saleCancel" type="button">Cancelar</button>
+      <button class="btn btn-primary" id="saleConfirm" type="button">Cobrar venta</button>
+    </div>
+  </div>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script type="application/json" id="catalogData">{{ products|tojson }}</script>
+<script type="application/json" id="branchData">{{ branch_objs|tojson }}</script>
+<script src="{{ url_for('static', filename='sales.js') }}"></script>
+{% endblock %}

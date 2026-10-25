@@ -1,0 +1,18 @@
+# Entornos y cachés
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Configuración local con secretos (el ejemplo es .env.example)
+.env
+
+# Datos de ejecución (jamás en el repositorio)
+*.db
+*.sqlite3
+backups/
+data/
+logs/

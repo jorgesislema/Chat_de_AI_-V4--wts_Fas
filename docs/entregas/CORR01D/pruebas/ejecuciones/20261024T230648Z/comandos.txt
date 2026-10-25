@@ -1,0 +1,7 @@
+# Comandos (credenciales sólo por variable de entorno privada; nunca literales)
+# export CRM_PREMIUM_TEST_URL con credenciales reales de pruebas
+# 1) pytest tests/ -o addopts= -v --tb=short  → suite_completa.txt
+# 2) python /tmp/repro_corr01d.py             → red_repro_C1_C2.txt (fallo pre-corrección)
+# 3) venv externo + scripts/dev/smoke_packaging.py → wheel_externo.txt
+# 4) sha256sum del wheel → wheel_sha256.txt
+# 5) tools/redact_evidencia.py --check → revision_evidencia.txt

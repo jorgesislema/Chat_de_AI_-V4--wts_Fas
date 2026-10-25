@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}Agenda — CRM Premium{% endblock %}
+{% block pagetitle %}Agenda{% endblock %}
+{% block topbarRight %}
+<div class="view-switch" id="viewSwitch" role="tablist">
+  <button class="view-btn" data-view="day">Día</button>
+  <button class="view-btn active" data-view="week">Semana</button>
+  <button class="view-btn" data-view="month">Mes</button>
+</div>
+{% endblock %}
+{% block content %}
+<div class="agenda-toolbar">
+  <div class="agenda-nav">
+    <button class="btn-icon" id="prevBtn" aria-label="Anterior">‹</button>
+    <button class="btn btn-ghost btn-sm" id="todayBtn">Hoy</button>
+    <button class="btn-icon" id="nextBtn" aria-label="Siguiente">›</button>
+    <h2 class="agenda-period" id="periodLabel">…</h2>
+  </div>
+  <div class="agenda-filters">
+    <label class="visually-hidden" for="resourceFilter">Recurso</label>
+    <select id="resourceFilter" class="input input-sm">
+      <option value="all">Todos los recursos</option>
+      {% for r in resources %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+    </select>
+    <label class="check-inline"><input type="checkbox" id="showCancelled"> Canceladas</label>
+  </div>
+</div>
+<div id="agendaRoot" class="agenda-root" data-zone="{{ profile.zone }}" aria-live="polite"></div>
+
+<dialog id="eventDialog" class="dialog">
+  <div class="dialog-head">
+    <h3 id="eventDialogTitle">Cita</h3>
+    <button class="btn-icon" id="eventDialogClose" aria-label="Cerrar">✕</button>
+  </div>
+  <div id="eventDialogBody" class="dialog-body"></div>
+</dialog>
+
+<dialog id="newDialog" class="dialog">
+  <form id="newForm" class="dialog-body form-grid" method="dialog">
+    <h3 class="dialog-title">Nueva cita</h3>
+    <label for="newResource">Recurso</label>
+    <select id="newResource" required>
+      {% for r in resources %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+    </select>
+    <label for="newTitle">Título</label>
+    <input id="newTitle" required maxlength="200" placeholder="Motivo de la cita">
+    <label for="newStart">Inicio</label>
+    <input id="newStart" type="datetime-local" required>
+    <label for="newEnd">Fin</label>
+    <input id="newEnd" type="datetime-local" required>
+    <label for="newService">Tratamiento / servicio (opcional)</label>
+    <select id="newService">
+      <option value="">— sin servicio —</option>
+      {% for s in services %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+    </select>
+    <label for="newContact">Cliente (opcional — busque y seleccione)</label>
+    <input id="newContact" type="text" list="contactOptions"
+           placeholder="Escriba nombre o teléfono…" autocomplete="off">
+    <datalist id="contactOptions"></datalist>
+    <label for="newReason">Motivo / nota (opcional)</label>
+    <input id="newReason" maxlength="300">
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-ghost" id="newCancel">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Guardar cita</button>
+    </div>
+    <p id="newError" class="alert alert-error hidden" role="alert"></p>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script type="application/json" id="servicesData">{{ services|tojson }}</script>
+<script src="{{ url_for('static', filename='agenda.js') }}"></script>
+{% endblock %}

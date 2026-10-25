@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block title %}Ajustes — CRM Premium{% endblock %}
+{% block pagetitle %}Ajustes{% endblock %}
+{% block content %}
+{% if saved %}<div class="alert alert-ok" role="status">Cambios guardados.</div>{% endif %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<div class="split-2">
+  <div class="card">
+    <h2 class="card-title">Negocio</h2>
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ g.session['csrf_token'] }}">
+      <label for="name">Nombre del negocio</label>
+      <input class="input" id="name" name="name" value="{{ profile.name }}" maxlength="120" required>
+      <label for="zone">Zona horaria (IANA)</label>
+      <input class="input" id="zone" name="zone" value="{{ profile.zone }}" maxlength="40" required
+             pattern="[A-Za-z_]+/[A-Za-z_0-9+\-]+">
+      <label for="currency">Moneda</label>
+      <input class="input" id="currency" name="currency" value="{{ profile.currency }}" maxlength="8">
+      <fieldset class="opening-fieldset">
+        <legend>Horario de atención (vacío = 24×7)</legend>
+        {% set days = profile.opening_json.get('days', []) if profile.opening_json else [] %}
+        <div class="days-row">
+          {% for label in ('L','M','X','J','V','S','D') %}
+          <label class="check-inline"><input type="checkbox" name="days" value="{{ loop.index0 }}"
+            {% if loop.index0 in days %}checked{% endif %}> {{ label }}</label>
+          {% endfor %}
+        </div>
+        <div class="days-times">
+          <label for="open_start">Desde <input class="input input-sm" id="open_start" name="open_start" type="time" value="{{ profile.opening_json.get('start','') if profile.opening_json else '' }}"></label>
+          <label for="open_end">Hasta <input class="input input-sm" id="open_end" name="open_end" type="time" value="{{ profile.opening_json.get('end','') if profile.opening_json else '' }}"></label>
+        </div>
+      </fieldset>
+      <button class="btn btn-primary" type="submit">Guardar ajustes</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Mi contraseña</h2>
+    <form method="post" action="{{ url_for('settings_password') }}" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ g.session['csrf_token'] }}">
+      <label for="current">Contraseña actual</label>
+      <input class="input" id="current" name="current" type="password" required autocomplete="current-password">
+      <label for="new">Nueva (mínimo 12 caracteres)</label>
+      <input class="input" id="new" name="new" type="password" required minlength="12" autocomplete="new-password">
+      <button class="btn btn-primary" type="submit">Cambiar contraseña</button>
+      <p class="muted footnote">Al cambiarla se cierran todas sus sesiones abiertas en
+      cualquier equipo.</p>
+    </form>
+  </div>
+</div>
+{% endblock %}

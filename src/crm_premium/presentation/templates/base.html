@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}CRM Premium{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+</head>
+<body class="app">
+<aside class="sidebar" id="sidebar">
+  <div class="brand">
+    <span class="brand-mark">◆</span>
+    <span class="brand-name">CRM <strong>Premium</strong></span>
+  </div>
+  <nav class="nav">
+    <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.path == '/' %}active{% endif %}">📊 Inicio</a>
+    <a href="{{ url_for('agenda_page') }}" class="nav-link {% if request.path.startswith('/agenda') %}active{% endif %}">🗓️ Agenda</a>
+    <a href="{{ url_for('contacts_page') }}" class="nav-link {% if request.path.startswith('/contacts') %}active{% endif %}">👥 Contactos</a>
+    <a href="{{ url_for('sales_page') }}" class="nav-link {% if request.path.startswith('/sales') %}active{% endif %}">💰 Ventas</a>
+    <a href="{{ url_for('inventory_page') }}" class="nav-link {% if request.path.startswith('/inventory') %}active{% endif %}">📦 Inventario</a>
+    <a href="{{ url_for('analytics_page') }}" class="nav-link {% if request.path.startswith('/analytics') %}active{% endif %}">📈 Analítica</a>
+    <a href="{{ url_for('assistant_page') }}" class="nav-link {% if request.path.startswith('/assistant') %}active{% endif %}">🤖 Asistente</a>
+    {% if g.user and g.user['role'] == 'admin' %}
+    <a href="{{ url_for('branches_page') }}" class="nav-link {% if request.path.startswith('/branches') %}active{% endif %}">🏢 Sedes</a>
+    <a href="{{ url_for('users_page') }}" class="nav-link {% if request.path.startswith('/users') %}active{% endif %}">🔑 Usuarios</a>
+    {% endif %}
+    <a href="{{ url_for('settings') }}" class="nav-link {% if request.path.startswith('/settings') %}active{% endif %}">⚙️ Ajustes</a>
+  </nav>
+  <div class="sidebar-footer">
+    {% if g.user %}
+      <div class="user-chip">
+        <span class="user-avatar">{{ g.user['full_name'][:1]|upper if g.user['full_name'] else 'U' }}</span>
+        <span class="user-meta">
+          <strong>{{ g.user['username'] }}</strong>
+          <small>{{ 'Administrador' if g.user['role'] == 'admin' else 'Usuario' }}</small>
+        </span>
+      </div>
+      <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ g.session['csrf_token'] }}">
+        <button type="submit" class="btn btn-ghost btn-block">Salir</button>
+      </form>
+    {% endif %}
+  </div>
+</aside>
+<main class="main">
+  <header class="topbar">
+    <button class="btn-icon menu-toggle" id="menuToggle" aria-label="Abrir menú">☰</button>
+    <h1 class="page-title">{% block pagetitle %}{% endblock %}</h1>
+    <span class="topbar-right">{% block topbarRight %}{% endblock %}</span>
+  </header>
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+</main>
+{% if g.session %}<meta name="csrf-token" content="{{ g.session['csrf_token'] }}">{% endif %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

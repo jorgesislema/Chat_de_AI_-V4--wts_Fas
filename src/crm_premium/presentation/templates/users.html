@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}Usuarios — CRM Premium{% endblock %}
+{% block pagetitle %}Usuarios{% endblock %}
+{% block content %}
+{% if saved %}<div class="alert alert-ok" role="status">Cambios guardados.</div>{% endif %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<div class="split-2">
+  <div class="card">
+    <h2 class="card-title">Cuentas</h2>
+    <table class="table">
+      <thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.username }}</td>
+          <td>{{ u.full_name or '—' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('users_role', user_id=u.id) }}" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ g.session['csrf_token'] }}">
+              <select name="role" class="input input-sm" onchange="this.form.submit()">
+                <option value="user" {% if u.role == 'user' %}selected{% endif %}>Usuario</option>
+                <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Administrador</option>
+              </select>
+            </form>
+          </td>
+          <td>
+            {% if u.is_active %}<span class="pill pill-confirmed">Activo</span>
+            {% else %}<span class="pill pill-cancelled">Desactivado</span>{% endif %}
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('users_active', user_id=u.id) }}" class="inline-form">
+              <input type="hidden" name="csrf_token" value="{{ g.session['csrf_token'] }}">
+              <input type="hidden" name="active" value="{{ '0' if u.is_active else '1' }}">
+              <button class="btn btn-ghost btn-sm" type="submit">
+                {{ 'Desactivar' if u.is_active else 'Reactivar' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2 class="card-title">Nuevo usuario</h2>
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ g.session['csrf_token'] }}">
+      <label for="username">Usuario</label>
+      <input class="input" id="username" name="username" required maxlength="40"
+             pattern="[A-Za-z0-9._\-]+">
+      <label for="full_name">Nombre completo</label>
+      <input class="input" id="full_name" name="full_name" maxlength="120">
+      <label for="role">Rol</label>
+      <select class="input" id="role" name="role">
+        <option value="user">Usuario</option>
+        <option value="admin">Administrador</option>
+      </select>
+      <label for="password">Contraseña (mínimo 12 caracteres)</label>
+      <input class="input" id="password" name="password" type="password" required minlength="12"
+             autocomplete="new-password">
+      <button class="btn btn-primary" type="submit">Crear usuario</button>
+    </form>
+    <p class="muted footnote">Sin contraseñas predeterminadas: cada cuenta nace con la
+    contraseña que usted asigne y debe cambiarse desde Ajustes.</p>
+  </div>
+</div>
+{% endblock %}

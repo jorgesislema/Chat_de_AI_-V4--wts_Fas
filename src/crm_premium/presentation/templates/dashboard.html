@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Inicio — CRM Premium{% endblock %}
+{% block pagetitle %}Inicio{% endblock %}
+{% block topbarRight %}<span class="muted">{{ summary.today }} · zona {{ summary.zone }}</span>{% endblock %}
+{% block content %}
+<section class="kpi-grid">
+  <div class="card kpi">
+    <span class="kpi-label">Citas de hoy</span>
+    <span class="kpi-value">{{ summary.today_counts.pending + summary.today_counts.confirmed + summary.today_counts.attended + summary.today_counts.no_show }}</span>
+    <span class="kpi-sub">{{ summary.today_counts.pending }} pendientes · {{ summary.today_counts.confirmed }} confirmadas</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">Esta semana</span>
+    <span class="kpi-value">{{ summary.week_total }}</span>
+    <span class="kpi-sub">citas activas lun–dom</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">Asistencia (30 d)</span>
+    <span class="kpi-value">{% if summary.attendance_rate is not none %}{{ (summary.attendance_rate * 100) | round(1) }}%{% else %}—{% endif %}</span>
+    <span class="kpi-sub">asistió / (asistió + no asistió)</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">Cierre pendiente</span>
+    <span class="kpi-value warn">{{ summary.pending_closure }}</span>
+    <span class="kpi-sub">abiertas ya vencidas · {{ summary.open_total }} abiertas</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">Contactos</span>
+    <span class="kpi-value">{{ summary.contacts_total }}</span>
+    <span class="kpi-sub">registrados</span>
+  </div>
+</section>
+
+<section class="panel-grid">
+  <div class="card chart-card">
+    <h2 class="card-title">Citas por día (14 días)</h2>
+    <div class="chart-bars" role="img" aria-label="Gráfico de barras de citas por día">
+      {% set max_v = summary.per_day | map(attribute='value') | max %}
+      {% for d in summary.per_day %}
+      <div class="bar-col" title="{{ d.day }}: {{ d.value }}">
+        <span class="bar-value">{{ d.value if d.value else '' }}</span>
+        <span class="bar {% if d.day == summary.today %}bar-today{% endif %}" style="height: {{ (d.value / (max_v if max_v else 1) * 100) | round(1) }}%"></span>
+        <span class="bar-label">{{ d.day[8:10] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card chart-card">
+    <h2 class="card-title">Estados (30 días)</h2>
+    <ul class="status-list">
+      {% set max_s = summary.by_status_30d | map(attribute='value') | max %}
+      {% for s in summary.by_status_30d %}
+      <li class="status-row">
+        <span class="status-name status-{{ s.key }}">{{ s.label }}</span>
+        <span class="status-track"><span class="status-fill status-{{ s.key }}" style="width: {{ (s.value / (max_s if max_s else 1) * 100) | round(1) }}%"></span></span>
+        <span class="status-n">{{ s.value }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="card chart-card">
+    <h2 class="card-title">Carga por recurso (semana)</h2>
+    {% if summary.by_resource %}
+    <ul class="status-list">
+      {% set max_r = summary.by_resource | map(attribute='value') | max %}
+      {% for r in summary.by_resource %}
+      <li class="status-row">
+        <span class="status-name">{{ r.label }}</span>
+        <span class="status-track"><span class="status-fill fill-accent" style="width: {{ (r.value / (max_r if max_r else 1) * 100) | round(1) }}%"></span></span>
+        <span class="status-n">{{ r.value }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Sin citas esta semana.</p>{% endif %}
+  </div>
+
+  <div class="card chart-card">
+    <h2 class="card-title">Próximas citas</h2>
+    {% if summary.upcoming %}
+    <ul class="upcoming-list">
+      {% for a in summary.upcoming %}
+      <li class="upcoming-item">
+        <span class="upcoming-time">{{ a.start_local }}</span>
+        <span class="upcoming-title">
+          {{ a.title }}
+          <small>{{ a.resource_name }}{% if a.contact_name %} · {{ a.contact_name }}{% endif %}</small>
+        </span>
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('agenda_page') }}">Ver</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">Nada programado hacia adelante.</p>{% endif %}
+  </div>
+</section>
+{% endblock %}

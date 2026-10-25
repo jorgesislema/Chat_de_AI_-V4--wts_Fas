@@ -1,0 +1,29 @@
+=== WHEEL EXTERNO — 2026-10-24T21:46:36Z ===
+venv externo: /tmp/tmp.3516N4ILLe (fuera del checkout)
+
+--- build (pip wheel, no-deps) ---
+Processing h:\git\agente de reserva v4
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: crm-premium
+  Building wheel for crm-premium (pyproject.toml): started
+  Building wheel for crm-premium (pyproject.toml): finished with status 'done'
+  Created wheel for crm-premium: filename=crm_premium-0.1.0-py3-none-any.whl size=85285 sha256=9a3ba9324e09b8326882d1491b7d103c6ddd14b7eba1a31d758560996cf08635
+  Stored in directory: C:\Users\jrgsi\AppData\Local\Temp\pip-ephem-wheel-cache-l59x8lva\wheels\d8\c4\5b\6da7517f93f1c315317e5d4315d677d78a5c96dade93b9ddff
+Successfully built crm-premium
+
+[notice] A new release of pip is available: 24.3.1 -> 26.2.2
+[notice] To update, run: H:\git\Agente de reserva V4\.venv\Scripts\python.exe -m pip install --upgrade pip
+exit build: 0
+--- install ---
+
+[notice] A new release of pip is available: 24.3.1 -> 26.2.2
+[notice] To update, run: C:\Users\jrgsi\AppData\Local\Temp\tmp.3516N4ILLe\venv\Scripts\python.exe -m pip install --upgrade pip
+exit install: 0
+--- smoke (script /tmp/smoke_packaging.py, base temporal dedicada) ---
+SMOKE OK: migraciones empaquetadas, login renderizado, estáticos servidos.
+exit smoke: 0

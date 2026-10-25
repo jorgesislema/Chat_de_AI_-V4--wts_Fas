@@ -1,0 +1,12 @@
+# Comandos de esta ejecución (credenciales por variable de entorno privada; nunca literales)
+# export CRM_PREMIUM_TEST_URL=[REDACTADO-credenciales-DB]@<servidor-pruebas>:5433/postgres?connect_timeout=5
+
+# 1) Suite completa (regresión)
+unset CURL_CA_BUNDLE; "$CRM_PREMIUM_TEST_URL" referenciada por el entorno; ./.venv/Scripts/python.exe -m pytest tests/ -o addopts= -v --tb=short > suite_completa.txt 2>&1; echo exit=$?
+
+# 2) Wheel externo
+unset CURL_CA_BUNDLE; ./.venv/Scripts/python.exe scripts/dev/smoke_packaging.py > wheel_externo.txt 2>&1; echo exit=$?
+sha256sum /tmp/crm_premium_wheel/*.whl > wheel_sha256.txt
+
+# 3) Revisión de evidencia (conteos, sin contenido)
+./.venv/Scripts/python.exe tools/redact_evidencia.py --check docs/entregas/CORR01C

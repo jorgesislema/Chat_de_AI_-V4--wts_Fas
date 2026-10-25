@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}Inventario — CRM Premium{% endblock %}
+{% block pagetitle %}Inventario y precios{% endblock %}
+{% block content %}
+{% if saved %}<div class="alert alert-ok" role="status">Cambio guardado (con historial auditado).</div>{% endif %}
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+<div class="split-2">
+  <div class="card wide">
+    <h2 class="card-title">Catálogo</h2>
+    <table class="table">
+      <thead><tr><th>SKU</th><th>Artículo</th><th>Tipo</th><th>Precio</th><th>Stock</th><th>Mín</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+        {% for p in products %}
+        <tr class="{% if p.kind == 'producto' and p.stock <= p.min_stock %}row-warn{% endif %}">
+          <td>{{ p.sku }}</td>
+          <td>{{ p.name }}{% if p.category %} <small class="muted">· {{ p.category }}</small>{% endif %}</td>
+          <td>{{ 'Tratamiento' if p.kind == 'servicio' else 'Producto' }}</td>
+          <td>{{ '%.2f'|format(p.price) }}{% if p.price_changes %} <small class="muted">({{ p.price_changes }})</small>{% endif %}</td>
+          <td>{% if p.kind == 'producto' %}{{ p.stock }}{% else %}—{% endif %}</td>
+          <td>{% if p.kind == 'producto' %}{{ p.min_stock }}{% else %}—{% endif %}</td>
+          <td>{% if p.is_active %}<span class="pill pill-confirmed">Activo</span>
+              {% else %}<span class="pill pill-cancelled">Inactivo</span>{% endif %}</td>
+          <td class="actions-cell">
+            <button class="btn btn-ghost btn-sm" type="button" onclick="showHistory({{ p.id }})">Historial</button>
+            {% if g.user['role'] == 'admin' %}
+            <button class="btn btn-ghost btn-sm" type="button" onclick="showPrice({{ p.id }}, '{{ p.name|e }}', {{ p.price }})">Precio</button>
+            {% if p.kind == 'producto' %}
+            <button class="btn btn-ghost btn-sm" type="button" onclick="showStock({{ p.id }}, '{{ p.name|e }}', {{ p.stock }})">Stock</button>
+            {% endif %}
+            <button class="btn btn-ghost btn-sm" type="button" onclick="toggleProduct({{ p.id }})">{{ 'Desactivar' if p.is_active else 'Activar' }}</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="muted">Catálogo vacío.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if g.user['role'] == 'admin' %}
+  <div class="card">
+    <h2 class="card-title">Nuevo artículo</h2>
+    <form method="post" action="{{ url_for('inventory_create') }}" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ g.session['csrf_token'] }}">
+      <label for="sku">SKU *</label>
+      <input class="input" id="sku" name="sku" required maxlength="40" placeholder="SRV-LIMPIEZA">
+      <label for="name">Nombre *</label>
+      <input class="input" id="name" name="name" required maxlength="160">
+      <label for="kind">Tipo</label>
+      <select class="input" id="kind" name="kind">
+        <option value="servicio">Tratamiento / servicio</option>
+        <option value="producto">Producto con stock</option>
+      </select>
+      <label for="category">Categoría</label>
+      <input class="input" id="category" name="category" maxlength="80">
+      <label for="price">Precio *</label>
+      <input class="input" id="price" name="price" required inputmode="decimal" placeholder="0.00">
+      <label for="cost">Costo (opcional)</label>
+      <input class="input" id="cost" name="cost" inputmode="decimal">
+      <label for="stock">Stock inicial</label>
+      <input class="input" id="stock" name="stock" type="number" min="0" value="0">
+      <label for="min_stock">Stock mínimo</label>
+      <input class="input" id="min_stock" name="min_stock" type="number" min="0" value="0">
+      <button class="btn btn-primary" type="submit">Crear artículo</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<dialog id="priceDialog" class="dialog">
+  <form class="dialog-body form-grid" method="dialog" id="priceForm">
+    <h3 class="dialog-title" id="priceTitle">Cambiar precio</h3>
+    <label for="newPrice">Nuevo precio</label>
+    <input class="input" id="newPrice" inputmode="decimal" required>
+    <label for="priceReason">Motivo del cambio (auditado) *</label>
+    <input class="input" id="priceReason" maxlength="300" required>
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" type="button" onclick="priceDialog.close()">Cancelar</button>
+      <button class="btn btn-primary" type="submit">Guardar precio</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="stockDialog" class="dialog">
+  <form class="dialog-body form-grid" method="dialog" id="stockForm">
+    <h3 class="dialog-title" id="stockTitle">Ajustar stock</h3>
+    <p class="muted" id="stockCurrent"></p>
+    <label for="stockDelta">Cantidad (+ entrada / − merma)</label>
+    <input class="input" id="stockDelta" type="number" required>
+    <label for="stockNote">Nota (auditada)</label>
+    <input class="input" id="stockNote" maxlength="300">
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" type="button" onclick="stockDialog.close()">Cancelar</button>
+      <button class="btn btn-primary" type="submit">Aplicar ajuste</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="historyDialog" class="dialog">
+  <div class="dialog-head">
+    <h3>Historial auditado</h3>
+    <button class="btn-icon" type="button" onclick="historyDialog.close()" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="dialog-body" id="historyBody"></div>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='inventory.js') }}"></script>{% endblock %}

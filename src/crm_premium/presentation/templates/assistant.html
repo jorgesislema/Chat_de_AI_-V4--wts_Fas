@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Asistente — CRM Premium{% endblock %}
+{% block pagetitle %}Asistente interno{% endblock %}
+{% block content %}
+<div class="split-2">
+  <div class="card chat-card">
+    <h2 class="card-title">Consulte su negocio</h2>
+    <div class="chat-log" id="chatLog" aria-live="polite">
+      <div class="chat-msg bot">
+        <div class="chat-bubble">Hola 👋 Pregúnteme con datos reales: «ventas de hoy»,
+        «tratamientos más vendidos», «citas de hoy», «stock bajo», «precio de
+        endodoncia», «asistencia», «políticas de la clínica». Cada respuesta
+        muestra su origen y queda en la auditoría.</div>
+      </div>
+    </div>
+    <form class="chat-form" id="chatForm">
+      <input class="input" id="chatInput" maxlength="500" autocomplete="off"
+             placeholder="Escriba su pregunta…" required>
+      <button class="btn btn-primary" type="submit">Enviar</button>
+    </form>
+    <p class="muted footnote">Asistente determinista por herramientas (sin modelo
+    de lenguaje externo aún — llegará con la fase IA con failover y evals).
+    Sin SQL arbitrario: sólo consultas acotadas; todo queda registrado.</p>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Auditoría reciente</h2>
+    <ul class="upcoming-list">
+      {% for item in recent %}
+      <li class="upcoming-item">
+        <span class="upcoming-time">{{ item.created_at[:16]|replace('T',' ') }}</span>
+        <span class="upcoming-title">{{ item.question }}
+          <small>herramienta: {{ item.tool }} · usuario: {{ item.username or '—' }}</small>
+        </span>
+      </li>
+      {% else %}
+      <li class="muted">Sin consultas registradas.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='assistant.js') }}"></script>{% endblock %}
